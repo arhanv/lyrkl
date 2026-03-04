@@ -1,0 +1,14 @@
+As part of an academic linguistics and acoustic modeling experiment, we are studying phonetic substitution patterns. Please generate {n_candidates} phonetic transformations of the following text sequence. The goal is to maximize phonetic similarity (especially terminal rhymes and syllable stress patterns) while completely diverging in semantic meaning. Do not write a parody; instead, write new sentences that are semantically unrelated but phonetically matched. 
+
+Sequence reference ID: {title} - {artist}
+
+Please produce {n_candidates} distinct variants. Separate each variant with the exact line:
+
+--- VARIANT ---
+
+Genre context (for atmospheric rhythm only): {genre}
+
+Original sequence:
+{lyrics}
+
+Produce {n_candidates} phonetically matched variants below:

@@ -1,0 +1,584 @@
+"""Pipeline orchestrator for lyrkl.
+
+Provides LyrkIPipeline, which coordinates all stages of the variation
+generation workflow:
+
+  1. add_songs  -- register songs in the database
+  2. fetch_lyrics -- pull lyrics from Genius (skips already-fetched songs)
+  3. generate_style -- generate LLM style descriptions (incremental)
+  4. generate_variations -- call LLM, score with Phi, save accepted/rejected
+  5. export_prompt_dataset -- write acelm-interp-compatible JSON
+
+Each stage can be run independently. Idempotency is guaranteed by the
+database layer: re-running a stage with the same config is always safe.
+
+Usage:
+    from lyrkl.config import load_config
+    from lyrkl.db import Database
+    from lyrkl.pipeline import LyrkIPipeline
+
+    config = load_config("configs/default.yaml")
+    db = Database(config.db_path)
+    pipeline = LyrkIPipeline(config, db)
+
+    pipeline.run_all([
+        {"title": "Lose Yourself", "artist": "Eminem", "genre": "hip-hop"},
+    ])
+    pipeline.export_prompt_dataset("data/prompts.json")
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
+
+from lyrkl.config import LyrkIConfig
+from lyrkl.db import Database
+from lyrkl.llm import (
+    LLMClient,
+    build_apt_prompt,
+    build_style_prompt,
+    get_client,
+    parse_candidates,
+)
+from lyrkl.lyrics import GeniusLyricsFetcher, make_song_id
+from lyrkl.models import (
+    LLMResponse,
+    Song,
+    StyleDescription,
+    StyleSource,
+    Variation,
+    VariantStatus,
+    VariantType,
+)
+from lyrkl.phi import filter_candidates
+
+logger = logging.getLogger(__name__)
+
+
+class LyrkIPipeline:
+    """Orchestrates the full lyrkl workflow.
+
+    Args:
+        config: LyrkI configuration object.
+        db: Open Database instance. The pipeline does not own nor close the DB.
+    """
+
+    def __init__(self, config: LyrkIConfig, db: Database) -> None:
+        self._config = config
+        self._db = db
+        self._llm_client: Optional[LLMClient] = None
+
+    # ------------------------------------------------------------------
+    # Stage 1: Add songs
+    # ------------------------------------------------------------------
+
+    def add_songs(self, song_list: list[dict[str, Any]]) -> list[str]:
+        """Register songs in the database without fetching lyrics.
+
+        Idempotent: already-existing songs are updated with any new fields
+        provided (e.g. genre), but lyrics are not overwritten.
+
+        Args:
+            song_list: List of song spec dicts. Each dict should have either:
+                - "title" and "artist" (and optionally "genre", "genius_id")
+                - "genius_id" (and optionally "genre")
+
+        Returns:
+            List of song_id slugs that were added or already present.
+        """
+        ids: list[str] = []
+        for spec in song_list:
+            spec = spec.copy()
+            genius_id = spec.get("genius_id")
+            title = spec.get("title", f"genius_{genius_id}")
+            artist = spec.get("artist", "Unknown")
+            genre = spec.get("genre", "")
+            song_id = spec.get("song_id") or make_song_id(artist, title)
+
+            song = Song(
+                song_id=song_id,
+                title=title,
+                artist=artist,
+                genre=genre,
+                genius_id=genius_id,
+            )
+            self._db.upsert_song(song)
+            ids.append(song_id)
+            logger.debug("Registered song: %s", song_id)
+
+        logger.info("add_songs: registered %d songs.", len(ids))
+        return ids
+
+    # ------------------------------------------------------------------
+    # Stage 2: Fetch lyrics
+    # ------------------------------------------------------------------
+
+    def fetch_lyrics(
+        self,
+        song_ids: Optional[list[str]] = None,
+    ) -> list[str]:
+        """Fetch lyrics from Genius for songs that don't have them yet.
+
+        Skips songs that already have clean_lyrics in the database.
+
+        Args:
+            song_ids: If provided, only fetch these specific songs.
+                Defaults to all songs without lyrics.
+
+        Returns:
+            List of song_id slugs for which lyrics were successfully fetched.
+        """
+        api_key = self._config.genius_api_key()
+        if not api_key:
+            raise ValueError(
+                "No Genius API key found. Set GENIUS_API_KEY in your environment."
+            )
+
+        if song_ids is not None:
+            pending = [
+                self._db.get_song(sid)
+                for sid in song_ids
+                if not (s := self._db.get_song(sid)) or not s.has_lyrics
+            ]
+            pending = [s for s in pending if s is not None]
+        else:
+            pending = self._db.songs_without_lyrics()
+
+        if not pending:
+            logger.info("fetch_lyrics: all songs already have lyrics.")
+            return []
+
+        fetcher = GeniusLyricsFetcher(
+            api_token=api_key,
+            rate_limit_delay=self._config.genius.rate_limit_delay,
+        )
+
+        fetched: list[str] = []
+        for song in pending:
+            if song.genius_id:
+                result = fetcher.fetch_by_genius_id(
+                    song.genius_id, genre=song.genre
+                )
+                if result:
+                    result.song_id = song.song_id
+            else:
+                result = fetcher.fetch_one(
+                    song.artist, song.title, genre=song.genre
+                )
+
+            if result is None:
+                logger.warning(
+                    "fetch_lyrics: could not fetch '%s - %s'",
+                    song.artist, song.title,
+                )
+                continue
+
+            self._db.upsert_song(result)
+            fetched.append(result.song_id)
+            logger.info("fetch_lyrics: fetched '%s'", result.song_id)
+
+        logger.info(
+            "fetch_lyrics: fetched %d/%d songs.", len(fetched), len(pending)
+        )
+        return fetched
+
+    # ------------------------------------------------------------------
+    # Stage 3: Generate style descriptions
+    # ------------------------------------------------------------------
+
+    def generate_style(
+        self,
+        song_ids: Optional[list[str]] = None,
+        overwrite: bool = False,
+    ) -> list[str]:
+        """Generate LLM style descriptions for songs that don't have one yet.
+
+        Uses the LLM's world knowledge (title, artist, genre) to produce a
+        rich one-sentence style description. Skips songs that already have
+        an LLM-sourced style description for the current prompt hash, unless
+        overwrite=True.
+
+        Falls back to a template-based description if no LLM key is available.
+
+        Args:
+            song_ids: If provided, only process these songs.
+            overwrite: If True, generate new descriptions even if they exist.
+
+        Returns:
+            List of song_ids for which a style description was generated.
+        """
+        client = self._get_llm_client(required=False)
+        use_llm = client is not None
+
+        if not use_llm:
+            logger.warning(
+                "generate_style: no LLM API key found; using template fallback."
+            )
+
+        if song_ids is not None:
+            songs = [s for sid in song_ids if (s := self._db.get_song(sid)) is not None]
+        else:
+            songs = self._db.list_songs()
+
+        songs = [s for s in songs if s.has_lyrics]
+
+        completed: list[str] = []
+        for song in songs:
+            if use_llm:
+                prompt_text, prompt_hash = build_style_prompt(song, self._config)
+                if not overwrite:
+                    existing = self._db.get_latest_style(song.song_id, StyleSource.LLM)
+                    if existing and existing.prompt_hash == prompt_hash:
+                        logger.debug(
+                            "generate_style: style already exists for '%s'",
+                            song.song_id,
+                        )
+                        continue
+
+                logger.info("generate_style: generating for '%s'", song.song_id)
+                try:
+                    response_text = client.generate(prompt_text)
+                except Exception as e:
+                    logger.error(
+                        "generate_style: LLM call failed for '%s': %s",
+                        song.song_id, e,
+                    )
+                    continue
+
+                # Save raw response
+                self._save_raw_response(
+                    song.song_id, "style", prompt_text,
+                    prompt_hash, response_text, n_candidates=1,
+                )
+
+                style_text = response_text.strip()
+                desc = StyleDescription(
+                    desc_id=str(uuid.uuid4()),
+                    song_id=song.song_id,
+                    text=style_text,
+                    source=StyleSource.LLM,
+                    model=self._config.llm.model,
+                    prompt_hash=prompt_hash,
+                    created_at=datetime.utcnow(),
+                )
+            else:
+                # Template fallback
+                if not overwrite:
+                    existing = self._db.get_latest_style(
+                        song.song_id, StyleSource.TEMPLATE
+                    )
+                    if existing:
+                        continue
+
+                style_text = (
+                    f"A {song.genre} song in the style of {song.artist}, "
+                    f"featuring characteristic instrumentation and production."
+                )
+                desc = StyleDescription(
+                    desc_id=str(uuid.uuid4()),
+                    song_id=song.song_id,
+                    text=style_text,
+                    source=StyleSource.TEMPLATE,
+                    model="template",
+                    prompt_hash="",
+                    created_at=datetime.utcnow(),
+                )
+
+            self._db.save_style_description(desc)
+            completed.append(song.song_id)
+
+        logger.info(
+            "generate_style: generated style for %d songs.", len(completed)
+        )
+        return completed
+
+    # ------------------------------------------------------------------
+    # Stage 4: Generate variations
+    # ------------------------------------------------------------------
+
+    def generate_variations(
+        self,
+        song_ids: Optional[list[str]] = None,
+        variant_type: VariantType = VariantType.PHONETIC,
+    ) -> dict[str, dict[str, int]]:
+        """Generate LLM lyric variations, score with Phi, and save to DB.
+
+        For each song not yet processed with the current prompt hash,
+        calls the LLM candidates_per_song times, parses candidates from
+        the response, scores each with the Phi metric, and saves both
+        accepted and rejected candidates.
+
+        Args:
+            song_ids: If provided, only process these songs. Defaults to all
+                songs with lyrics that have not yet been varied with this prompt.
+            variant_type: Variant type to generate (default: PHONETIC).
+
+        Returns:
+            Dict mapping song_id -> {"accepted": n, "rejected": n}.
+        """
+        client = self._get_llm_client(required=True)
+
+        # Determine prompt hash for idempotency check
+        _dummy_song = Song(song_id="x", title="T", artist="A", genre="g",
+                           clean_lyrics="l", raw_lyrics="l")
+        _, prompt_hash_template = build_apt_prompt(_dummy_song, self._config)
+
+        if song_ids is not None:
+            songs = [s for sid in song_ids if (s := self._db.get_song(sid)) is not None]
+        else:
+            songs = self._db.songs_without_variations(prompt_hash_template)
+
+        if not songs:
+            logger.info("generate_variations: nothing to process.")
+            return {}
+
+        summary: dict[str, dict[str, int]] = {}
+
+        for song in songs:
+            if not song.has_lyrics:
+                logger.warning(
+                    "generate_variations: '%s' has no lyrics; skipping.",
+                    song.song_id,
+                )
+                continue
+
+            prompt_text, prompt_hash = build_apt_prompt(song, self._config)
+
+            # Skip if already done with this exact prompt
+            if self._db.response_exists(song.song_id, prompt_hash, "apt"):
+                logger.debug(
+                    "generate_variations: already generated for '%s'",
+                    song.song_id,
+                )
+                continue
+
+            logger.info(
+                "generate_variations: calling LLM for '%s'", song.song_id
+            )
+
+            try:
+                response_text = client.generate(prompt_text)
+            except Exception as e:
+                logger.error(
+                    "generate_variations: LLM call failed for '%s': %s",
+                    song.song_id, e,
+                )
+                continue
+
+            candidates = parse_candidates(response_text)
+            if not candidates:
+                logger.warning(
+                    "generate_variations: no candidates parsed for '%s'. "
+                    "Raw response:\n%s",
+                    song.song_id, response_text[:500],
+                )
+                # Still save the response so we don't call again
+                candidates = []
+
+            # Save raw LLM response
+            response_id = self._save_raw_response(
+                song.song_id, "apt", prompt_text,
+                prompt_hash, response_text, n_candidates=len(candidates),
+            )
+
+            # Score and filter
+            accepted, rejected = filter_candidates(
+                song.clean_lyrics, candidates, self._config
+            )
+
+            variations: list[Variation] = []
+            for idx, (lyrics, phi) in enumerate(accepted):
+                variations.append(
+                    self._make_variation(
+                        song, lyrics, phi, prompt_hash,
+                        response_id, VariantStatus.ACCEPTED,
+                        variant_type, idx,
+                    )
+                )
+            for idx, (lyrics, phi) in enumerate(rejected):
+                variations.append(
+                    self._make_variation(
+                        song, lyrics, phi, prompt_hash,
+                        response_id, VariantStatus.REJECTED,
+                        variant_type, len(accepted) + idx,
+                    )
+                )
+
+            self._db.save_variations(variations)
+
+            n_accepted = len(accepted)
+            n_rejected = len(rejected)
+            summary[song.song_id] = {
+                "accepted": n_accepted,
+                "rejected": n_rejected,
+            }
+            logger.info(
+                "generate_variations: '%s' -> %d accepted, %d rejected (phi >= %.2f)",
+                song.song_id, n_accepted, n_rejected,
+                self._config.phi.min_aggregate,
+            )
+
+        return summary
+
+    # ------------------------------------------------------------------
+    # Convenience: run all stages
+    # ------------------------------------------------------------------
+
+    def run_all(
+        self,
+        song_list: list[dict[str, Any]],
+        generate_style: bool = True,
+    ) -> None:
+        """Run all pipeline stages in order.
+
+        Equivalent to calling:
+            add_songs -> fetch_lyrics -> generate_style -> generate_variations
+
+        Args:
+            song_list: Song spec dicts (same format as add_songs).
+            generate_style: If True (default), generate LLM style descriptions
+                before variations.
+        """
+        self.add_songs(song_list)
+        self.fetch_lyrics()
+        if generate_style:
+            self.generate_style()
+        self.generate_variations()
+
+    # ------------------------------------------------------------------
+    # Audio linking
+    # ------------------------------------------------------------------
+
+    def link_audio(self, song_id: str, audio_path: str) -> None:
+        """Register an audio file path for a song.
+
+        Args:
+            song_id: Song slug.
+            audio_path: Filesystem path to an audio file.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+            ValueError: If the song is not in the database.
+        """
+        from lyrkl.audio import link_audio as _link_audio
+        _link_audio(song_id, audio_path, self._db)
+
+    # ------------------------------------------------------------------
+    # Export
+    # ------------------------------------------------------------------
+
+    def export_prompt_dataset(
+        self,
+        path: str | Path,
+        song_ids: Optional[list[str]] = None,
+        variant_types: Optional[list[VariantType]] = None,
+    ) -> int:
+        """Export accepted variations as acelm-interp PromptDataset JSON.
+
+        Args:
+            path: Output file path. Parent directories are created.
+            song_ids: If provided, only include these songs.
+            variant_types: If provided, only include these variant types.
+
+        Returns:
+            Number of variation records written.
+        """
+        records = self._db.to_prompt_dataset(
+            song_ids=song_ids, variant_types=variant_types
+        )
+        out = Path(path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(records, indent=2, ensure_ascii=False))
+        logger.info("Exported %d records to %s", len(records), out)
+        return len(records)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _get_llm_client(self, required: bool = True) -> Optional[LLMClient]:
+        """Return (and cache) the LLM client, or None if no key is set."""
+        if self._llm_client is not None:
+            return self._llm_client
+        try:
+            self._llm_client = get_client(self._config)
+            return self._llm_client
+        except ValueError as e:
+            if required:
+                raise
+            logger.debug("LLM client not available: %s", e)
+            return None
+
+    def _save_raw_response(
+        self,
+        song_id: str,
+        purpose: str,
+        prompt_text: str,
+        prompt_hash: str,
+        response_text: str,
+        n_candidates: int,
+    ) -> str:
+        """Save an LLM response to DB and to a raw text file.
+
+        Returns:
+            The response_id UUID string.
+        """
+        response_id = str(uuid.uuid4())
+        raw_dir = self._config.llm_responses_dir / song_id
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        raw_path = raw_dir / f"{response_id}.txt"
+        raw_path.write_text(
+            f"PROMPT:\n{prompt_text}\n\n---\nRESPONSE:\n{response_text}",
+            encoding="utf-8",
+        )
+
+        response = LLMResponse(
+            response_id=response_id,
+            song_id=song_id,
+            purpose=purpose,
+            model=self._config.llm.model,
+            prompt_hash=prompt_hash,
+            prompt_text=prompt_text,
+            response_text=response_text,
+            n_candidates=n_candidates,
+            raw_file_path=str(raw_path.resolve()),
+            created_at=datetime.utcnow(),
+        )
+        self._db.save_llm_response(response)
+        return response_id
+
+    def _make_variation(
+        self,
+        song: Song,
+        lyrics: str,
+        phi,
+        prompt_hash: str,
+        llm_response_id: str,
+        status: VariantStatus,
+        variant_type: VariantType,
+        candidate_index: int,
+    ) -> Variation:
+        """Create a content-addressed Variation object."""
+        import hashlib
+        var_id = hashlib.sha256(
+            f"{song.song_id}|{prompt_hash}|{candidate_index}|{lyrics}".encode()
+        ).hexdigest()
+
+        return Variation(
+            var_id=var_id,
+            song_id=song.song_id,
+            variant_type=variant_type,
+            lyrics=lyrics,
+            phi_scores=phi,
+            phi_aggregate=phi.aggregate,
+            prompt_hash=prompt_hash,
+            llm_response_id=llm_response_id,
+            status=status,
+            created_at=datetime.utcnow(),
+            candidate_index=candidate_index,
+        )

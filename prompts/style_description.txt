@@ -1,0 +1,9 @@
+You are a music expert with deep knowledge of recorded music. Describe the musical style of the following song in a single sentence suitable as a text prompt for a music generation model.
+
+Focus on: genre, instrumentation, tempo, mood, vocal style, and production era. Do NOT mention copyright. Do NOT reproduce any lyrics. Keep the description under 50 words.
+
+Song: "{title}"
+Artist: {artist}
+Genre (hint): {genre}
+
+Style description (one sentence):
