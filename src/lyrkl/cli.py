@@ -7,7 +7,18 @@ Usage:
     lyrkl --config configs/default.yaml style
     lyrkl --config configs/default.yaml vary
     lyrkl --config configs/default.yaml run-all songs.yaml
-    lyrkl --config configs/default.yaml export --out data/prompts.json
+
+    # Export verbatim full-song lyrics (default):
+    lyrkl --config configs/default.yaml export --out data/fullsong_40.json
+
+    # Export verbatim chorus sections only:
+    lyrkl --config configs/default.yaml export --section chorus --out data/chorus_only_40.json
+
+    # Export shuffled-line control (deterministic seed):
+    lyrkl --config configs/default.yaml export --shuffle-lines --shuffle-seed 1337 --out data/chorus_shuffled_40.json
+
+    # Export accepted phonetic variations (after vary stage):
+    lyrkl --config configs/default.yaml export --variations --out data/phonetic.json
 """
 
 from __future__ import annotations
@@ -152,14 +163,90 @@ def run_all(ctx: click.Context, songs_file: str, no_style: bool) -> None:
 @click.option(
     "--song", "song_ids", multiple=True, help="Specific song IDs to export."
 )
+@click.option(
+    "--section",
+    default=None,
+    help=(
+        "Extract a named lyric section (e.g. 'chorus') from each song and export "
+        "it as a verbatim record. Also matches common aliases: chorus catches "
+        "[Hook] and [Refrain]; omit to export the full clean_lyrics."
+    ),
+)
+@click.option(
+    "--variations",
+    "use_variations",
+    is_flag=True,
+    default=False,
+    help="Export accepted phonetic variations from the variations table instead of verbatim lyrics.",
+)
+@click.option(
+    "--caption",
+    default="",
+    show_default=True,
+    help=(
+        'Caption embedded in every record. Defaults to empty string (caption-free, '
+        'recommended for encoder probing). Pass "auto" to use the DB style description.'
+    ),
+)
+@click.option(
+    "--shuffle-lines",
+    is_flag=True,
+    default=False,
+    help="Shuffle lyric line order before export (control variant).",
+)
+@click.option(
+    "--shuffle-seed",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Base deterministic seed used when --shuffle-lines is enabled.",
+)
 @click.pass_context
-def export(ctx: click.Context, out_path: str, song_ids: tuple[str, ...]) -> None:
-    """Export accepted variations as acelm-interp PromptDataset JSON."""
+def export(
+    ctx: click.Context,
+    out_path: str,
+    song_ids: tuple[str, ...],
+    section: Optional[str],
+    use_variations: bool,
+    caption: str,
+    shuffle_lines: bool,
+    shuffle_seed: int,
+) -> None:
+    """Export lyrics as an acelm-interp PromptDataset JSON.
+
+    By default, exports verbatim lyrics for every song that has lyrics.
+    Use --section to extract a named section (e.g. chorus), or --variations
+    to export accepted phonetic variations from the vary stage instead.
+    """
     pipeline: LyrkIPipeline = ctx.obj["pipeline"]
-    n = pipeline.export_prompt_dataset(
-        out_path, song_ids=list(song_ids) if song_ids else None
-    )
-    click.echo(f"Exported {n} records to {out_path}.")
+
+    if use_variations:
+        if shuffle_lines:
+            raise click.UsageError(
+                "--shuffle-lines applies only to verbatim export. "
+                "Use export without --variations."
+            )
+        n = pipeline.export_prompt_dataset(
+            out_path, song_ids=list(song_ids) if song_ids else None
+        )
+    else:
+        n = pipeline.export_verbatim_dataset(
+            out_path,
+            song_ids=list(song_ids) if song_ids else None,
+            section=section,
+            caption=caption,
+            shuffle_lines=shuffle_lines,
+            shuffle_seed=shuffle_seed,
+        )
+
+    mode = f"[{section}] section" if section else "full song"
+    if use_variations:
+        src = "variations"
+    elif shuffle_lines:
+        src = f"shuffled ({mode}, seed={shuffle_seed})"
+    else:
+        src = f"verbatim ({mode})"
+    click.echo(f"Exported {n} records ({src}) to {out_path}.")
 
 
 if __name__ == "__main__":

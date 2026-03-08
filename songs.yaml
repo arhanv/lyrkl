@@ -1,102 +1,751 @@
 songs:
-  # Pop
-  - title: "Love Story"
-    artist: "Taylor Swift"
-    genre: "country-pop"
-  - title: "Shake It Off"
-    artist: "Taylor Swift"
-    genre: "pop"
-  - title: "Someone Like You"
-    artist: "Adele"
-    genre: "pop-ballad"
-  - title: "Rolling in the Deep"
-    artist: "Adele"
-    genre: "pop-soul"
-  - title: "Shape of You"
-    artist: "Ed Sheeran"
-    genre: "pop"
-  - title: "Halo"
-    artist: "Beyonce"
-    genre: "pop-r&b"
-  - title: "Bad Romance"
-    artist: "Lady Gaga"
-    genre: "pop"
-  - title: "Just the Way You Are"
-    artist: "Bruno Mars"
-    genre: "pop"
-
-  # Rock
-  - title: "Bohemian Rhapsody"
-    artist: "Queen"
-    genre: "rock"
-  - title: "Smells Like Teen Spirit"
-    artist: "Nirvana"
-    genre: "grunge"
-  - title: "Hey Jude"
-    artist: "The Beatles"
-    genre: "rock"
-  - title: "Wonderwall"
-    artist: "Oasis"
-    genre: "britpop"
-  - title: "Creep"
-    artist: "Radiohead"
-    genre: "alternative-rock"
-
-  # Hip-hop / Rap
-  - title: "Lose Yourself"
-    artist: "Eminem"
-    genre: "hip-hop"
-  - title: "DNA"
-    artist: "Kendrick Lamar"
-    genre: "hip-hop"
-  - title: "Hotline Bling"
-    artist: "Drake"
-    genre: "hip-hop"
-  - title: "Stronger"
-    artist: "Kanye West"
-    genre: "hip-hop"
-
-  # R&B / Soul
-  - title: "Superstition"
-    artist: "Stevie Wonder"
-    genre: "funk-soul"
-  - title: "I Will Always Love You"
-    artist: "Whitney Houston"
-    genre: "pop-r&b"
-  - title: "Back to Black"
-    artist: "Amy Winehouse"
-    genre: "neo-soul"
-
-  # Country
-  - title: "Ring of Fire"
-    artist: "Johnny Cash"
-    genre: "country"
-  - title: "Jolene"
-    artist: "Dolly Parton"
-    genre: "country"
-
-  # Other
-  - title: "No Woman No Cry"
-    artist: "Bob Marley"
-    genre: "reggae"
-  - title: "Dancing Queen"
-    artist: "ABBA"
-    genre: "disco-pop"
-  - title: "Billie Jean"
-    artist: "Michael Jackson"
-    genre: "pop"
-  - title: "Tiny Dancer"
-    artist: "Elton John"
-    genre: "rock"
-  - title: "Dreams"
-    artist: "Fleetwood Mac"
-    genre: "rock"
-  - title: "Blinding Lights"
-    artist: "The Weeknd"
-    genre: "synth-pop"
-  - title: "Bad Guy"
-    artist: "Billie Eilish"
-    genre: "pop"
-  - title: "Levitating"
-    artist: "Dua Lipa"
-    genre: "disco-pop"
+- title: Love Story
+  artist: Taylor Swift
+  genre: country-pop
+- title: Shake It Off
+  artist: Taylor Swift
+  genre: pop
+- title: Blank Space
+  artist: Taylor Swift
+  genre: pop
+- title: Anti-Hero
+  artist: Taylor Swift
+  genre: pop
+- title: Cruel Summer
+  artist: Taylor Swift
+  genre: pop
+- title: You Belong With Me
+  artist: Taylor Swift
+  genre: country-pop
+- title: All Too Well
+  artist: Taylor Swift
+  genre: country-pop
+- title: Cardigan
+  artist: Taylor Swift
+  genre: indie-pop
+- title: Style
+  artist: Taylor Swift
+  genre: pop
+- title: We Are Never Ever Getting Back Together
+  artist: Taylor Swift
+  genre: pop
+- title: Rolling in the Deep
+  artist: Adele
+  genre: pop-soul
+- title: Someone Like You
+  artist: Adele
+  genre: pop-ballad
+- title: Hello
+  artist: Adele
+  genre: pop-ballad
+- title: Set Fire to the Rain
+  artist: Adele
+  genre: pop-soul
+- title: Easy On Me
+  artist: Adele
+  genre: pop-ballad
+- title: Skyfall
+  artist: Adele
+  genre: pop-ballad
+- title: When We Were Young
+  artist: Adele
+  genre: pop-ballad
+- title: Make You Feel My Love
+  artist: Adele
+  genre: pop-soul
+- title: Chasing Pavements
+  artist: Adele
+  genre: pop-soul
+- title: Send My Love (To Your New Lover)
+  artist: Adele
+  genre: pop
+- title: Bohemian Rhapsody
+  artist: Queen
+  genre: rock
+- title: We Will Rock You
+  artist: Queen
+  genre: rock
+- title: Somebody to Love
+  artist: Queen
+  genre: rock
+- title: Don't Stop Me Now
+  artist: Queen
+  genre: rock
+- title: Under Pressure
+  artist: Queen
+  genre: rock
+- title: We Are the Champions
+  artist: Queen
+  genre: rock
+- title: Another One Bites the Dust
+  artist: Queen
+  genre: rock
+- title: Killer Queen
+  artist: Queen
+  genre: rock
+- title: Radio Ga Ga
+  artist: Queen
+  genre: rock
+- title: Crazy Little Thing Called Love
+  artist: Queen
+  genre: rock
+- title: Lose Yourself
+  artist: Eminem
+  genre: hip-hop
+- title: Without Me
+  artist: Eminem
+  genre: hip-hop
+- title: The Real Slim Shady
+  artist: Eminem
+  genre: hip-hop
+- title: Stan
+  artist: Eminem
+  genre: hip-hop
+- title: Mockingbird
+  artist: Eminem
+  genre: hip-hop
+- title: Not Afraid
+  artist: Eminem
+  genre: hip-hop
+- title: Love The Way You Lie
+  artist: Eminem
+  genre: hip-hop
+- title: Rap God
+  artist: Eminem
+  genre: hip-hop
+- title: My Name Is
+  artist: Eminem
+  genre: hip-hop
+- title: Till I Collapse
+  artist: Eminem
+  genre: hip-hop
+- title: Halo
+  artist: Beyonce
+  genre: pop-r&b
+- title: Crazy in Love
+  artist: Beyonce
+  genre: r&b
+- title: Single Ladies
+  artist: Beyonce
+  genre: r&b
+- title: Irreplaceable
+  artist: Beyonce
+  genre: pop-r&b
+- title: Formation
+  artist: Beyonce
+  genre: r&b
+- title: Drunk in Love
+  artist: Beyonce
+  genre: r&b
+- title: If I Were A Boy
+  artist: Beyonce
+  genre: pop-r&b
+- title: Listen
+  artist: Beyonce
+  genre: r&b
+- title: Love On Top
+  artist: Beyonce
+  genre: pop-r&b
+- title: Run the World (Girls)
+  artist: Beyonce
+  genre: r&b
+- title: Shape of You
+  artist: Ed Sheeran
+  genre: pop
+- title: Thinking Out Loud
+  artist: Ed Sheeran
+  genre: pop
+- title: Perfect
+  artist: Ed Sheeran
+  genre: pop-ballad
+- title: Castle on the Hill
+  artist: Ed Sheeran
+  genre: pop-rock
+- title: Photograph
+  artist: Ed Sheeran
+  genre: pop-ballad
+- title: Bad Habits
+  artist: Ed Sheeran
+  genre: pop
+- title: Galway Girl
+  artist: Ed Sheeran
+  genre: pop
+- title: The A Team
+  artist: Ed Sheeran
+  genre: pop-folk
+- title: Shivers
+  artist: Ed Sheeran
+  genre: pop
+- title: Don't
+  artist: Ed Sheeran
+  genre: pop
+- title: Billie Jean
+  artist: Michael Jackson
+  genre: pop
+- title: Beat It
+  artist: Michael Jackson
+  genre: pop-rock
+- title: Thriller
+  artist: Michael Jackson
+  genre: pop
+- title: Don't Stop 'Til You Get Enough
+  artist: Michael Jackson
+  genre: disco-pop
+- title: Smooth Criminal
+  artist: Michael Jackson
+  genre: pop
+- title: Man In The Mirror
+  artist: Michael Jackson
+  genre: pop-soul
+- title: Black or White
+  artist: Michael Jackson
+  genre: pop-rock
+- title: The Way You Make Me Feel
+  artist: Michael Jackson
+  genre: pop
+- title: Bad
+  artist: Michael Jackson
+  genre: pop
+- title: Earth Song
+  artist: Michael Jackson
+  genre: pop-ballad
+- title: No Woman No Cry
+  artist: Bob Marley
+  genre: reggae
+- title: One Love
+  artist: Bob Marley
+  genre: reggae
+- title: Redemption Song
+  artist: Bob Marley
+  genre: reggae
+- title: Three Little Birds
+  artist: Bob Marley
+  genre: reggae
+- title: Is This Love
+  artist: Bob Marley
+  genre: reggae
+- title: Jamming
+  artist: Bob Marley
+  genre: reggae
+- title: Could You Be Loved
+  artist: Bob Marley
+  genre: reggae
+- title: Stir It Up
+  artist: Bob Marley
+  genre: reggae
+- title: Get Up, Stand Up
+  artist: Bob Marley
+  genre: reggae
+- title: Buffalo Soldier
+  artist: Bob Marley
+  genre: reggae
+- title: Jolene
+  artist: Dolly Parton
+  genre: country
+- title: 9 to 5
+  artist: Dolly Parton
+  genre: country
+- title: I Will Always Love You
+  artist: Dolly Parton
+  genre: country-ballad
+- title: Coat of Many Colors
+  artist: Dolly Parton
+  genre: country
+- title: Here You Come Again
+  artist: Dolly Parton
+  genre: country-pop
+- title: Islands In The Stream
+  artist: Dolly Parton
+  genre: country-pop
+- title: Two Doors Down
+  artist: Dolly Parton
+  genre: country-pop
+- title: My Tennessee Mountain Home
+  artist: Dolly Parton
+  genre: country
+- title: Love Is Like A Butterfly
+  artist: Dolly Parton
+  genre: country
+- title: Why'd You Come in Here Lookin' Like That
+  artist: Dolly Parton
+  genre: country
+- title: Smells Like Teen Spirit
+  artist: Nirvana
+  genre: grunge
+- title: Come as You Are
+  artist: Nirvana
+  genre: grunge
+- title: Lithium
+  artist: Nirvana
+  genre: grunge
+- title: In Bloom
+  artist: Nirvana
+  genre: grunge
+- title: Heart-Shaped Box
+  artist: Nirvana
+  genre: grunge
+- title: All Apologies
+  artist: Nirvana
+  genre: grunge
+- title: The Man Who Sold the World
+  artist: Nirvana
+  genre: grunge
+- title: Something In The Way
+  artist: Nirvana
+  genre: grunge
+- title: About A Girl
+  artist: Nirvana
+  genre: grunge
+- title: Polly
+  artist: Nirvana
+  genre: grunge
+- title: HUMBLE.
+  artist: Kendrick Lamar
+  genre: hip-hop
+- title: Alright
+  artist: Kendrick Lamar
+  genre: hip-hop
+- title: Bitch, Don't Kill My Vibe
+  artist: Kendrick Lamar
+  genre: hip-hop
+- title: m.A.A.d city
+  artist: Kendrick Lamar
+  genre: hip-hop
+- title: Swimming Pools (Drank)
+  artist: Kendrick Lamar
+  genre: hip-hop
+- title: DNA.
+  artist: Kendrick Lamar
+  genre: hip-hop
+- title: King Kunta
+  artist: Kendrick Lamar
+  genre: hip-hop
+- title: LOVE.
+  artist: Kendrick Lamar
+  genre: hip-hop
+- title: Poetic Justice
+  artist: Kendrick Lamar
+  genre: hip-hop
+- title: Money Trees
+  artist: Kendrick Lamar
+  genre: hip-hop
+- title: Creep
+  artist: Radiohead
+  genre: alt-rock
+- title: Karma Police
+  artist: Radiohead
+  genre: alt-rock
+- title: No Surprises
+  artist: Radiohead
+  genre: alt-rock
+- title: High and Dry
+  artist: Radiohead
+  genre: alt-rock
+- title: Fake Plastic Trees
+  artist: Radiohead
+  genre: alt-rock
+- title: Paranoid Android
+  artist: Radiohead
+  genre: alt-rock
+- title: Let Down
+  artist: Radiohead
+  genre: alt-rock
+- title: Weird Fishes/ Arpeggi
+  artist: Radiohead
+  genre: alt-rock
+- title: There, There
+  artist: Radiohead
+  genre: alt-rock
+- title: Idioteque
+  artist: Radiohead
+  genre: alt-rock
+- title: bad guy
+  artist: Billie Eilish
+  genre: pop
+- title: when the party's over
+  artist: Billie Eilish
+  genre: pop
+- title: everything i wanted
+  artist: Billie Eilish
+  genre: pop
+- title: ocean eyes
+  artist: Billie Eilish
+  genre: pop
+- title: bury a friend
+  artist: Billie Eilish
+  genre: pop
+- title: Happier Than Ever
+  artist: Billie Eilish
+  genre: pop
+- title: Lovely
+  artist: Billie Eilish
+  genre: pop
+- title: idontwannabeyouanymore
+  artist: Billie Eilish
+  genre: pop
+- title: Therefore I Am
+  artist: Billie Eilish
+  genre: pop
+- title: What Was I Made For?
+  artist: Billie Eilish
+  genre: pop
+- title: Let It Be
+  artist: The Beatles
+  genre: rock
+- title: Hey Jude
+  artist: The Beatles
+  genre: rock
+- title: Yesterday
+  artist: The Beatles
+  genre: rock
+- title: Come Together
+  artist: The Beatles
+  genre: rock
+- title: Here Comes The Sun
+  artist: The Beatles
+  genre: rock
+- title: Something
+  artist: The Beatles
+  genre: rock
+- title: Blackbird
+  artist: The Beatles
+  genre: rock
+- title: Penny Lane
+  artist: The Beatles
+  genre: rock
+- title: All You Need Is Love
+  artist: The Beatles
+  genre: rock
+- title: A Day In The Life
+  artist: The Beatles
+  genre: rock
+- title: My Way
+  artist: Frank Sinatra
+  genre: jazz
+- title: Fly Me To The Moon
+  artist: Frank Sinatra
+  genre: jazz
+- title: That's Life
+  artist: Frank Sinatra
+  genre: jazz
+- title: Strangers In The Night
+  artist: Frank Sinatra
+  genre: jazz
+- title: New York, New York
+  artist: Frank Sinatra
+  genre: jazz
+- title: I've Got You Under My Skin
+  artist: Frank Sinatra
+  genre: jazz
+- title: Summer Wind
+  artist: Frank Sinatra
+  genre: jazz
+- title: The Way You Look Tonight
+  artist: Frank Sinatra
+  genre: jazz
+- title: Come Fly With Me
+  artist: Frank Sinatra
+  genre: jazz
+- title: It Was A Very Good Year
+  artist: Frank Sinatra
+  genre: jazz
+- title: Ring of Fire
+  artist: Johnny Cash
+  genre: country
+- title: I Walk the Line
+  artist: Johnny Cash
+  genre: country
+- title: Folsom Prison Blues
+  artist: Johnny Cash
+  genre: country
+- title: Hurt
+  artist: Johnny Cash
+  genre: country
+- title: A Boy Named Sue
+  artist: Johnny Cash
+  genre: country
+- title: Man in Black
+  artist: Johnny Cash
+  genre: country
+- title: Jackson
+  artist: Johnny Cash
+  genre: country
+- title: Get Rhythm
+  artist: Johnny Cash
+  genre: country
+- title: Sunday Mornin' Comin' Down
+  artist: Johnny Cash
+  genre: country
+- title: Big River
+  artist: Johnny Cash
+  genre: country
+- title: God's Plan
+  artist: Drake
+  genre: hip-hop
+- title: Hotline Bling
+  artist: Drake
+  genre: pop-rap
+- title: One Dance
+  artist: Drake
+  genre: pop-r&b
+- title: In My Feelings
+  artist: Drake
+  genre: hip-hop
+- title: Hold On, We're Going Home
+  artist: Drake
+  genre: pop-r&b
+- title: Started From the Bottom
+  artist: Drake
+  genre: hip-hop
+- title: Passionfruit
+  artist: Drake
+  genre: pop-r&b
+- title: Take Care
+  artist: Drake
+  genre: pop-r&b
+- title: Nice For What
+  artist: Drake
+  genre: hip-hop
+- title: Marvins Room
+  artist: Drake
+  genre: r&b
+- title: Bad Romance
+  artist: Lady Gaga
+  genre: pop
+- title: Poker Face
+  artist: Lady Gaga
+  genre: pop
+- title: Just Dance
+  artist: Lady Gaga
+  genre: pop
+- title: Born This Way
+  artist: Lady Gaga
+  genre: pop
+- title: Shallow
+  artist: Lady Gaga
+  genre: pop-ballad
+- title: Telephone
+  artist: Lady Gaga
+  genre: pop
+- title: Paparazzi
+  artist: Lady Gaga
+  genre: pop
+- title: Alejandro
+  artist: Lady Gaga
+  genre: pop
+- title: Million Reasons
+  artist: Lady Gaga
+  genre: pop-ballad
+- title: The Edge of Glory
+  artist: Lady Gaga
+  genre: pop
+- title: Superstition
+  artist: Stevie Wonder
+  genre: soul
+- title: Isn't She Lovely
+  artist: Stevie Wonder
+  genre: soul
+- title: Sir Duke
+  artist: Stevie Wonder
+  genre: soul
+- title: I Just Called To Say I Love You
+  artist: Stevie Wonder
+  genre: soul
+- title: Signed, Sealed, Delivered (I'm Yours)
+  artist: Stevie Wonder
+  genre: soul
+- title: Higher Ground
+  artist: Stevie Wonder
+  genre: soul
+- title: Lately
+  artist: Stevie Wonder
+  genre: soul
+- title: Ribbon In The Sky
+  artist: Stevie Wonder
+  genre: soul
+- title: Master Blaster (Jammin')
+  artist: Stevie Wonder
+  genre: soul
+- title: Overjoyed
+  artist: Stevie Wonder
+  genre: soul
+- title: Like a Rolling Stone
+  artist: Bob Dylan
+  genre: folk-rock
+- title: Blowin' in the Wind
+  artist: Bob Dylan
+  genre: folk
+- title: The Times They Are A-Changin'
+  artist: Bob Dylan
+  genre: folk
+- title: Mr. Tambourine Man
+  artist: Bob Dylan
+  genre: folk
+- title: Knockin' On Heaven's Door
+  artist: Bob Dylan
+  genre: folk-rock
+- title: Tangled Up in Blue
+  artist: Bob Dylan
+  genre: folk
+- title: Hurricane
+  artist: Bob Dylan
+  genre: folk-rock
+- title: All Along the Watchtower
+  artist: Bob Dylan
+  genre: folk-rock
+- title: Don't Think Twice, It's All Right
+  artist: Bob Dylan
+  genre: folk
+- title: Make You Feel My Love
+  artist: Bob Dylan
+  genre: folk
+- title: Stronger
+  artist: Kanye West
+  genre: hip-hop
+- title: Heartless
+  artist: Kanye West
+  genre: hip-hop
+- title: Gold Digger
+  artist: Kanye West
+  genre: hip-hop
+- title: All Of The Lights
+  artist: Kanye West
+  genre: hip-hop
+- title: POWER
+  artist: Kanye West
+  genre: hip-hop
+- title: Runaway
+  artist: Kanye West
+  genre: hip-hop
+- title: Bound 2
+  artist: Kanye West
+  genre: hip-hop
+- title: Flashing Lights
+  artist: Kanye West
+  genre: hip-hop
+- title: Can't Tell Me Nothing
+  artist: Kanye West
+  genre: hip-hop
+- title: Jesus Walks
+  artist: Kanye West
+  genre: hip-hop
+- title: Umbrella
+  artist: Rihanna
+  genre: pop-r&b
+- title: Diamonds
+  artist: Rihanna
+  genre: pop-r&b
+- title: We Found Love
+  artist: Rihanna
+  genre: dance-pop
+- title: Work
+  artist: Rihanna
+  genre: pop-r&b
+- title: Stay
+  artist: Rihanna
+  genre: pop-ballad
+- title: Love On The Brain
+  artist: Rihanna
+  genre: r&b-soul
+- title: Only Girl (In The World)
+  artist: Rihanna
+  genre: dance-pop
+- title: Disturbia
+  artist: Rihanna
+  genre: pop
+- title: Pon de Replay
+  artist: Rihanna
+  genre: dance-pop
+- title: Needed Me
+  artist: Rihanna
+  genre: r&b
+- title: drivers license
+  artist: Olivia Rodrigo
+  genre: pop-ballad
+- title: good 4 u
+  artist: Olivia Rodrigo
+  genre: pop-punk
+- title: deja vu
+  artist: Olivia Rodrigo
+  genre: pop
+- title: traitor
+  artist: Olivia Rodrigo
+  genre: pop-ballad
+- title: vampire
+  artist: Olivia Rodrigo
+  genre: pop-rock
+- title: bad idea right?
+  artist: Olivia Rodrigo
+  genre: pop-rock
+- title: get him back!
+  artist: Olivia Rodrigo
+  genre: pop-rock
+- title: brutal
+  artist: Olivia Rodrigo
+  genre: alt-pop
+- title: logical
+  artist: Olivia Rodrigo
+  genre: pop-ballad
+- title: making the bed
+  artist: Olivia Rodrigo
+  genre: pop
+- title: The Sound of Silence
+  artist: Simon & Garfunkel
+  genre: folk-rock
+- title: Mrs. Robinson
+  artist: Simon & Garfunkel
+  genre: folk-rock
+- title: Bridge Over Troubled Water
+  artist: Simon & Garfunkel
+  genre: folk-rock
+- title: The Boxer
+  artist: Simon & Garfunkel
+  genre: folk-rock
+- title: Homeward Bound
+  artist: Simon & Garfunkel
+  genre: folk-rock
+- title: Cecilia
+  artist: Simon & Garfunkel
+  genre: folk-rock
+- title: America
+  artist: Simon & Garfunkel
+  genre: folk-rock
+- title: Scarborough Fair / Canticle
+  artist: Simon & Garfunkel
+  genre: folk-rock
+- title: I Am a Rock
+  artist: Simon & Garfunkel
+  genre: folk-rock
+- title: A Hazy Shade of Winter
+  artist: Simon & Garfunkel
+  genre: folk-rock
+- title: '1979'
+  artist: The Smashing Pumpkins
+  genre: alt-rock
+- title: Bullet with Butterfly Wings
+  artist: The Smashing Pumpkins
+  genre: alt-rock
+- title: Today
+  artist: The Smashing Pumpkins
+  genre: alt-rock
+- title: Zero
+  artist: The Smashing Pumpkins
+  genre: alt-rock
+- title: Disarm
+  artist: The Smashing Pumpkins
+  genre: alt-rock
+- title: Tonight, Tonight
+  artist: The Smashing Pumpkins
+  genre: alt-rock
+- title: Cherub Rock
+  artist: The Smashing Pumpkins
+  genre: alt-rock
+- title: Mayonaise
+  artist: The Smashing Pumpkins
+  genre: alt-rock
+- title: Siva
+  artist: The Smashing Pumpkins
+  genre: alt-rock
+- title: Perfect
+  artist: The Smashing Pumpkins
+  genre: alt-rock

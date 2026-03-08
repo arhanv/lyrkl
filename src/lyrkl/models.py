@@ -20,6 +20,7 @@ class VariantType(str, Enum):
     PHONETIC: Phonetically similar but semantically different lyrics (APT).
     VERBATIM: Original lyrics unchanged (AVT upper-bound baseline).
     SEMANTIC: Paraphrased lyrics preserving meaning but changing sound.
+    SHUFFLED: Original lyrics with line order shuffled (control).
     RANDOM: Lyrics from another song entirely (lower-bound control).
     STYLE_ONLY: No lyrics; uses only a style/caption description.
     """
@@ -27,6 +28,7 @@ class VariantType(str, Enum):
     PHONETIC = "phonetic"
     VERBATIM = "verbatim"
     SEMANTIC = "semantic"
+    SHUFFLED = "shuffled"
     RANDOM = "random"
     STYLE_ONLY = "style_only"
 

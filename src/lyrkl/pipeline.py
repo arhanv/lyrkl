@@ -56,6 +56,7 @@ from lyrkl.models import (
     VariantType,
 )
 from lyrkl.phi import filter_candidates
+from lyrkl.variants import shuffle_lyrics_lines
 
 logger = logging.getLogger(__name__)
 
@@ -495,6 +496,126 @@ class LyrkIPipeline:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(records, indent=2, ensure_ascii=False))
         logger.info("Exported %d records to %s", len(records), out)
+        return len(records)
+
+    def export_verbatim_dataset(
+        self,
+        path: str | Path,
+        song_ids: Optional[list[str]] = None,
+        section: Optional[str] = None,
+        caption: str = "",
+        shuffle_lines: bool = False,
+        shuffle_seed: int = 0,
+    ) -> int:
+        """Export verbatim lyrics from the songs table as a PromptDataset JSON.
+
+        Reads directly from the songs table (no variations required). Useful
+        for verbatim baseline experiments and encoder probing.
+
+        Args:
+            path: Output file path. Parent directories are created.
+            song_ids: If provided, only include these songs. Defaults to all
+                songs that have lyrics.
+            section: If provided, extract only this named section from each
+                song's lyrics (e.g. "chorus"). Matches variants like
+                [Chorus 1], [Chorus: Artist], [Hook], [Refrain]. Songs
+                without the requested section are skipped.
+            caption: Caption embedded in every record. Defaults to "" (no
+                caption), which is recommended for encoder probing experiments.
+                Pass "auto" to use the DB style description instead.
+            shuffle_lines: If True, export a shuffled-line control variant
+                instead of strict verbatim lyrics.
+            shuffle_seed: Base deterministic seed for line shuffling. The
+                effective per-song seed is `shuffle_seed + song_index`.
+
+        Returns:
+            Number of records written.
+        """
+        import re
+
+        all_songs = self._db.list_songs()
+        if song_ids is not None:
+            song_id_set = set(song_ids)
+            all_songs = [s for s in all_songs if s.song_id in song_id_set]
+
+        # Build section regex if needed. Aliases: chorus also catches hook/refrain.
+        _aliases: dict[str, list[str]] = {
+            "chorus": ["chorus", "hook", "refrain"],
+        }
+
+        def _make_section_re(name: str) -> re.Pattern:
+            aliases = _aliases.get(name.lower(), [name.lower()])
+            alias_pat = "|".join(re.escape(a) for a in aliases)
+            return re.compile(
+                rf"\[(?:{alias_pat})(?:\s+\d+)?(?::[^\]]+)?\](.*?)(?=\n\[|$)",
+                re.IGNORECASE | re.DOTALL,
+            )
+
+        section_re = _make_section_re(section) if section else None
+
+        records = []
+        skipped = []
+
+        for song_index, song in enumerate(all_songs):
+            if not song.has_lyrics:
+                skipped.append(f"{song.song_id} (no lyrics)")
+                continue
+
+            if section_re is not None:
+                match = section_re.search(song.clean_lyrics)
+                if not match:
+                    skipped.append(f"{song.song_id} (no [{section}] section found)")
+                    continue
+                lyrics_text = match.group(1).strip()
+            else:
+                lyrics_text = song.clean_lyrics
+
+            if shuffle_lines:
+                effective_seed = shuffle_seed + song_index
+                lyrics_text = shuffle_lyrics_lines(lyrics_text, effective_seed)
+                variant_value = "shuffled"
+                prompt_hash = f"shuffled_lines_seed_{shuffle_seed}"
+                var_suffix = f"shuffled_{effective_seed}_{section or 'full'}"
+            else:
+                effective_seed = None
+                variant_value = "verbatim"
+                prompt_hash = "verbatim_baseline"
+                var_suffix = f"verbatim_{section or 'full'}"
+
+            if caption == "auto":
+                cap = self._db._get_style_text(song.song_id) or f"A {song.genre} song by {song.artist}."
+            else:
+                cap = caption
+
+            records.append({
+                "song_id": song.song_id,
+                "lyrics": lyrics_text,
+                "caption": cap,
+                "variant": variant_value,
+                "metadata": {
+                    "title": song.title,
+                    "artist": song.artist,
+                    "genre": song.genre,
+                    "phi_aggregate": 1.0,
+                    "phi_scores": {},
+                    "prompt_hash": prompt_hash,
+                    "var_id": f"{song.song_id}_{var_suffix}",
+                    "status": "accepted",
+                    "source_variant": "verbatim",
+                    "shuffle_seed": effective_seed,
+                },
+            })
+
+        out = Path(path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(records, indent=2, ensure_ascii=False))
+        logger.info("Exported %d verbatim records to %s", len(records), out)
+
+        if skipped:
+            logger.warning("Skipped %d songs:", len(skipped))
+            for s in skipped:
+                logger.warning("  - %s", s)
+
         return len(records)
 
     # ------------------------------------------------------------------
