@@ -1,0 +1,10 @@
+songs:
+  - title: Bohemian Rhapsody
+    artist: Queen
+    genre: rock
+  - title: Lose Yourself
+    artist: Eminem
+    genre: hip-hop
+  - title: Rolling in the Deep
+    artist: Adele
+    genre: pop-soul

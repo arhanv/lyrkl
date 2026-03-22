@@ -7,7 +7,7 @@ generation workflow:
   2. fetch_lyrics -- pull lyrics from Genius (skips already-fetched songs)
   3. generate_style -- generate LLM style descriptions (incremental)
   4. generate_variations -- call LLM, score with Phi, save accepted/rejected
-  5. export_prompt_dataset -- write acelm-interp-compatible JSON
+  5. export_prompt_dataset -- write a PromptDataset JSON for downstream experiments
 
 Each stage can be run independently. Idempotency is guaranteed by the
 database layer: re-running a stage with the same config is always safe.
@@ -665,7 +665,7 @@ class LyrkIPipeline:
         song_ids: Optional[list[str]] = None,
         variant_types: Optional[list[VariantType]] = None,
     ) -> int:
-        """Export accepted variations as acelm-interp PromptDataset JSON.
+        """Export accepted variations as a PromptDataset JSON for downstream experiments.
 
         Args:
             path: Output file path. Parent directories are created.

@@ -6,3 +6,6 @@ __pycache__/
 .DS_Store
 *.db
 .env
+AGENTS.md
+artists.yaml
+bow_baseline_plot.png

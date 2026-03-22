@@ -1,8 +1,8 @@
 """Export one artist's lyrics to a txt file: copy verbatim from DB or JSON (no cleaning).
 
 Each block is: first line = song name (song_id), rest = lyrics. Blocks separated by
-LYRICS_FILE_SONG_SEPARATOR. The acelm-interp steering loader uses the first line as
-song_id when saving runs.
+LYRICS_FILE_SONG_SEPARATOR. The first line of each block can be used as a song_id
+key when loading the file in downstream experiments.
 
 Usage:
   # From lyrkl DB (config supplies db path):
@@ -33,7 +33,7 @@ if str(_repo_root) not in sys.path:
 from lyrkl.config import load_config
 from lyrkl.db import Database
 
-# Explicit separator between songs; must not appear in lyrics. Match in acelm-interp loader.
+# Explicit separator between songs; must not appear in lyrics.
 LYRICS_FILE_SONG_SEPARATOR = "\n<<<LYRKL_SONG_SEP>>>\n"
 
 

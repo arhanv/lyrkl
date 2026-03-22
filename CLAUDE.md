@@ -34,5 +34,5 @@ persisted in a SQLite database so no LLM call ever needs to be repeated.
   re-calls the LLM; changing config automatically triggers new calls.
 - **Incremental pipeline:** each stage (`fetch`, `style`, `vary`) can be run
   independently and skips work already done.
-- **acelm-interp compatibility:** `pipeline.export_prompt_dataset()` emits JSON
-  in the `PromptDataset` format used by the acelm-interp repo.
+- **JSON export format:** `pipeline.export_prompt_dataset()` emits a `PromptDataset`
+  JSON list suitable for downstream probing, evaluation, or data curation workflows.
