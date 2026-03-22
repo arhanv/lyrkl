@@ -45,7 +45,7 @@ from lyrkl.llm import (
     get_client,
     parse_candidates,
 )
-from lyrkl.lyrics import GeniusLyricsFetcher, make_song_id
+from lyrkl.lyrics import ArtistSongFilter, GeniusLyricsFetcher, make_song_id
 from lyrkl.models import (
     LLMResponse,
     Song,
@@ -99,6 +99,7 @@ class LyrkIPipeline:
             title = spec.get("title", f"genius_{genius_id}")
             artist = spec.get("artist", "Unknown")
             genre = spec.get("genre", "")
+            artist_gender = spec.get("artist_gender")
             song_id = spec.get("song_id") or make_song_id(artist, title)
 
             song = Song(
@@ -107,6 +108,7 @@ class LyrkIPipeline:
                 artist=artist,
                 genre=genre,
                 genius_id=genius_id,
+                artist_gender=artist_gender,
             )
             self._db.upsert_song(song)
             ids.append(song_id)
@@ -114,6 +116,189 @@ class LyrkIPipeline:
 
         logger.info("add_songs: registered %d songs.", len(ids))
         return ids
+
+    # ------------------------------------------------------------------
+    # Artist resolution
+    # ------------------------------------------------------------------
+
+    def resolve_artist(
+        self,
+        artist: str,
+        filter: ArtistSongFilter = None,
+        genre: str = "",
+        artist_gender: Optional[str] = None,
+    ) -> list[str]:
+        """Resolve an artist's top songs via Genius and register them in the DB.
+
+        Fetches up to filter.max_songs songs for the given artist, applies the
+        configured filters, and registers the results with add_songs(). Does not
+        fetch lyrics; call fetch_lyrics() after this step.
+
+        Args:
+            artist: Artist name to search for on Genius.
+            filter: ArtistSongFilter controlling filtering behaviour.
+                Defaults to ArtistSongFilter() with all defaults.
+            genre: Genre label to attach to every resolved song.
+            artist_gender: Optional gender label (e.g. "Female", "Male").
+
+        Returns:
+            List of song_id slugs that were registered.
+        """
+        if filter is None:
+            filter = ArtistSongFilter()
+
+        api_key = self._config.genius_api_key()
+        if not api_key:
+            raise ValueError(
+                "No Genius API key found. Set GENIUS_API_KEY in your environment."
+            )
+
+        fetcher = GeniusLyricsFetcher(
+            api_token=api_key,
+            rate_limit_delay=self._config.genius.rate_limit_delay,
+            timeout=self._config.genius.timeout,
+        )
+        song_specs = fetcher.resolve_artist_songs(artist, filter=filter, genre=genre)
+        if artist_gender is not None:
+            for spec in song_specs:
+                spec["artist_gender"] = artist_gender
+        return self.add_songs(song_specs)
+
+    def resolve_artists(
+        self,
+        artist_list: list[dict[str, Any]],
+        default_filter: ArtistSongFilter = None,
+    ) -> list[str]:
+        """Resolve multiple artists and register all their songs in the DB.
+
+        Each entry in artist_list must have a "name" key and may include any
+        ArtistSongFilter field as an override (max_songs, sort, max_year,
+        include_featured_vocals, include_collaborations, exclude_remixes,
+        exclude_covers, genre).
+
+        Args:
+            artist_list: List of artist spec dicts. Required key: "name".
+                Optional keys mirror ArtistSongFilter fields plus "genre".
+            default_filter: Base ArtistSongFilter applied to all artists.
+                Per-artist keys in artist_list override these defaults.
+
+        Returns:
+            Combined list of song_id slugs registered across all artists.
+        """
+        if default_filter is None:
+            default_filter = ArtistSongFilter()
+
+        all_ids: list[str] = []
+        for spec in artist_list:
+            spec = spec.copy()
+            artist_name = spec.pop("name")
+            genre = spec.pop("genre", "")
+            artist_gender = spec.pop("artist_gender", None)
+
+            # Build per-artist filter by merging defaults with any overrides.
+            filter_kwargs = {
+                "max_songs": default_filter.max_songs,
+                "sort": default_filter.sort,
+                "include_featured_vocals": default_filter.include_featured_vocals,
+                "include_collaborations": default_filter.include_collaborations,
+                "exclude_remixes": default_filter.exclude_remixes,
+                "exclude_covers": default_filter.exclude_covers,
+                "max_year": default_filter.max_year,
+            }
+            for key in list(filter_kwargs):
+                if key in spec:
+                    filter_kwargs[key] = spec.pop(key)
+
+            per_artist_filter = ArtistSongFilter(**filter_kwargs)
+            ids = self.resolve_artist(
+                artist_name, filter=per_artist_filter, genre=genre,
+                artist_gender=artist_gender,
+            )
+            all_ids.extend(ids)
+
+        logger.info(
+            "resolve_artists: registered %d songs across %d artists.",
+            len(all_ids), len(artist_list),
+        )
+        return all_ids
+
+    # ------------------------------------------------------------------
+    # Duplicate detection
+    # ------------------------------------------------------------------
+
+    def check_duplicates(
+        self,
+        song_ids: Optional[list[str]] = None,
+        threshold: float = 0.8,
+    ) -> list[tuple[str, str, float]]:
+        """Find pairs of songs with highly similar lyrics.
+
+        Computes pairwise Jaccard similarity on word bags of clean_lyrics.
+        Songs without lyrics are skipped. Results are logged as warnings.
+
+        Args:
+            song_ids: If provided, only check these songs. Defaults to all
+                songs with lyrics.
+            threshold: Minimum Jaccard similarity to flag a pair (0.0-1.0).
+
+        Returns:
+            List of (song_id_a, song_id_b, jaccard_score) tuples for all pairs
+            at or above the threshold, sorted descending by score.
+        """
+        if song_ids is not None:
+            songs = [s for sid in song_ids if (s := self._db.get_song(sid)) is not None]
+        else:
+            songs = self._db.list_songs()
+
+        # Genius ID collision check: same genius_id registered under multiple
+        # song_ids. This can happen when a song appears in multiple artists'
+        # catalogs (e.g. a featured appearance). Runs on all songs, not just
+        # those with lyrics, so it catches issues before fetch is run.
+        gid_map: dict[int, list[str]] = {}
+        for s in songs:
+            if s.genius_id is not None:
+                gid_map.setdefault(s.genius_id, []).append(s.song_id)
+        for gid, sids in gid_map.items():
+            if len(sids) > 1:
+                logger.warning(
+                    "check_duplicates: genius_id=%d appears under %d song_ids: %s",
+                    gid, len(sids), sids,
+                )
+
+        songs = [s for s in songs if s.has_lyrics]
+
+        flagged: list[tuple[str, str, float]] = []
+
+        for i in range(len(songs)):
+            words_i = set(songs[i].clean_lyrics.lower().split())
+            if not words_i:
+                continue
+            for j in range(i + 1, len(songs)):
+                words_j = set(songs[j].clean_lyrics.lower().split())
+                if not words_j:
+                    continue
+                intersection = len(words_i & words_j)
+                union = len(words_i | words_j)
+                jaccard = intersection / union if union > 0 else 0.0
+                if jaccard >= threshold:
+                    flagged.append((songs[i].song_id, songs[j].song_id, jaccard))
+
+        flagged.sort(key=lambda t: t[2], reverse=True)
+
+        if flagged:
+            logger.warning(
+                "check_duplicates: found %d potential duplicate pair(s) "
+                "(threshold=%.2f):",
+                len(flagged), threshold,
+            )
+            for a, b, score in flagged:
+                logger.warning("  %s  <->  %s  (jaccard=%.3f)", a, b, score)
+        else:
+            logger.info(
+                "check_duplicates: no duplicates found (threshold=%.2f).", threshold
+            )
+
+        return flagged
 
     # ------------------------------------------------------------------
     # Stage 2: Fetch lyrics
@@ -157,6 +342,7 @@ class LyrkIPipeline:
         fetcher = GeniusLyricsFetcher(
             api_token=api_key,
             rate_limit_delay=self._config.genius.rate_limit_delay,
+            timeout=self._config.genius.timeout,
         )
 
         fetched: list[str] = []
@@ -596,6 +782,7 @@ class LyrkIPipeline:
                     "title": song.title,
                     "artist": song.artist,
                     "genre": song.genre,
+                    "artist_gender": song.artist_gender,
                     "phi_aggregate": 1.0,
                     "phi_scores": {},
                     "prompt_hash": prompt_hash,

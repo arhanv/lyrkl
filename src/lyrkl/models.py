@@ -76,6 +76,8 @@ class Song:
             section markers to lowercase (e.g. [verse], [chorus]).
         fetched_at: UTC timestamp when lyrics were retrieved.
         audio_path: Optional filesystem path to a linked audio file.
+        artist_gender: Optional gender label for the artist (e.g. "Female",
+            "Male", "Nonbinary"). User-supplied; not available from Genius.
     """
 
     song_id: str
@@ -87,6 +89,7 @@ class Song:
     fetched_at: Optional[datetime] = None
     genius_id: Optional[int] = None
     audio_path: Optional[str] = None
+    artist_gender: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dict."""

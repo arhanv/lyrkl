@@ -29,6 +29,7 @@ class GeniusConfig:
     """Genius API settings."""
 
     rate_limit_delay: float = 1.0
+    timeout: float = 30.0
 
 
 @dataclass

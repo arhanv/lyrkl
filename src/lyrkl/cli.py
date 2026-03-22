@@ -34,6 +34,7 @@ import yaml
 
 from lyrkl.config import load_config
 from lyrkl.db import Database
+from lyrkl.lyrics import ArtistSongFilter
 from lyrkl.pipeline import LyrkIPipeline
 
 logging.basicConfig(
@@ -41,6 +42,63 @@ logging.basicConfig(
     format="%(asctime)s %(name)-20s %(levelname)-8s %(message)s",
     datefmt="%H:%M:%S",
 )
+
+# Known gender keys that trigger the gender-keyed YAML format.
+_GENDER_KEYS = {"female", "male", "nonbinary", "non-binary", "other"}
+
+
+def _parse_artists_yaml(path: str, default_genre: str = "") -> list[dict]:
+    """Parse an artists YAML file in either of two formats.
+
+    Gender-keyed format::
+
+        Female:
+          - Taylor Swift
+          - name: Ariana Grande
+            genre: pop
+
+        Male:
+          - Ed Sheeran
+
+    Flat format (existing)::
+
+        artists:
+          - name: Eminem
+            genre: hip-hop
+
+    In the gender-keyed format the key (e.g. "Female") is stored as
+    ``artist_gender`` on each entry. Plain strings and dicts are both
+    accepted as list items. Per-artist keys override the top-level defaults.
+
+    Args:
+        path: Path to the YAML file.
+        default_genre: Fallback genre when none is specified per-artist.
+
+    Returns:
+        List of artist spec dicts with at least a ``name`` key.
+    """
+    with open(path) as f:
+        data = yaml.safe_load(f) or {}
+
+    top_keys_lower = {k.lower() for k in data}
+
+    if top_keys_lower & _GENDER_KEYS:
+        # Gender-keyed format.
+        artist_list: list[dict] = []
+        for key, entries in data.items():
+            gender = key  # preserve original capitalisation, e.g. "Female"
+            for entry in (entries or []):
+                if isinstance(entry, str):
+                    spec: dict = {"name": entry}
+                else:
+                    spec = dict(entry)
+                spec.setdefault("genre", default_genre)
+                spec["artist_gender"] = gender
+                artist_list.append(spec)
+        return artist_list
+
+    # Flat format.
+    return data.get("artists", [])
 
 
 @click.group()
@@ -131,6 +189,148 @@ def vary(ctx: click.Context, song_ids: tuple[str, ...]) -> None:
             f"  {song_id}: {counts['accepted']} accepted, {counts['rejected']} rejected"
         )
     click.echo(f"Done. Processed {len(summary)} songs.")
+
+
+@main.command("resolve-artists")
+@click.argument("artists", nargs=-1)
+@click.option(
+    "--file", "artists_file",
+    type=click.Path(exists=True),
+    default=None,
+    help=(
+        "YAML file with an 'artists' list. Each entry must have 'name' and may "
+        "include genre, max_songs, max_year, sort, include_featured_vocals, "
+        "include_collaborations, exclude_remixes, exclude_covers."
+    ),
+)
+@click.option("--genre", default="", show_default=True, help="Genre label for all resolved songs.")
+@click.option("--max-songs", type=int, default=20, show_default=True, help="Songs to resolve per artist.")
+@click.option(
+    "--sort",
+    type=click.Choice(["popularity", "title"]),
+    default="popularity",
+    show_default=True,
+    help="Sort order for Genius results.",
+)
+@click.option("--no-featured-vocals", is_flag=True, default=False, help="Exclude songs with featured vocalists.")
+@click.option("--no-collaborations", is_flag=True, default=False, help="Exclude joint-credit releases.")
+@click.option("--include-remixes", is_flag=True, default=False, help="Include remixes even when original is present.")
+@click.option("--include-covers", is_flag=True, default=False, help="Include cover versions.")
+@click.option("--before-year", type=int, default=None, help="Exclude songs released after this year.")
+@click.pass_context
+def resolve_artists(
+    ctx: click.Context,
+    artists: tuple[str, ...],
+    artists_file: Optional[str],
+    genre: str,
+    max_songs: int,
+    sort: str,
+    no_featured_vocals: bool,
+    no_collaborations: bool,
+    include_remixes: bool,
+    include_covers: bool,
+    before_year: Optional[int],
+) -> None:
+    """Resolve top songs for one or more artists via Genius and register them.
+
+    Pass artist names as arguments, or use --file to read from a YAML file.
+    The two sources are mutually exclusive. After resolving, run 'lyrkl fetch'
+    to download lyrics.
+
+    \b
+    Examples:
+      lyrkl resolve-artists "Eminem" "Kendrick Lamar" --genre hip-hop
+      lyrkl resolve-artists --file artists.yaml
+    """
+    if artists and artists_file:
+        raise click.UsageError("Provide either artist names or --file, not both.")
+    if not artists and not artists_file:
+        raise click.UsageError("Provide at least one artist name or --file.")
+
+    pipeline: LyrkIPipeline = ctx.obj["pipeline"]
+
+    default_filter = ArtistSongFilter(
+        max_songs=max_songs,
+        sort=sort,
+        include_featured_vocals=not no_featured_vocals,
+        include_collaborations=not no_collaborations,
+        exclude_remixes=not include_remixes,
+        exclude_covers=not include_covers,
+        max_year=before_year,
+    )
+
+    if artists_file:
+        artist_list = _parse_artists_yaml(artists_file, default_genre=genre)
+    else:
+        artist_list = [{"name": a, "genre": genre} for a in artists]
+
+    ids = pipeline.resolve_artists(artist_list, default_filter=default_filter)
+    click.echo(f"Resolved and registered {len(ids)} songs. Run 'lyrkl fetch' to download lyrics.")
+
+
+@main.command("check-duplicates")
+@click.option(
+    "--threshold",
+    type=float,
+    default=0.8,
+    show_default=True,
+    help="Minimum Jaccard similarity to flag a pair.",
+)
+@click.option(
+    "--song", "song_ids", multiple=True, help="Specific song IDs to check (defaults to all)."
+)
+@click.pass_context
+def check_duplicates(
+    ctx: click.Context,
+    threshold: float,
+    song_ids: tuple[str, ...],
+) -> None:
+    """Find songs with suspiciously similar lyrics (post-fetch sanity check).
+
+    Compares word-bag Jaccard similarity between all songs with lyrics.
+    Pairs at or above --threshold are printed as potential duplicates.
+
+    Run this after 'lyrkl fetch' to catch accidentally repeated songs.
+    """
+    pipeline: LyrkIPipeline = ctx.obj["pipeline"]
+    pairs = pipeline.check_duplicates(
+        song_ids=list(song_ids) if song_ids else None,
+        threshold=threshold,
+    )
+    if pairs:
+        click.echo(f"Found {len(pairs)} potential duplicate pair(s) (threshold={threshold}):")
+        for a, b, score in pairs:
+            click.echo(f"  {a}  <->  {b}  (jaccard={score:.3f})")
+    else:
+        click.echo(f"No duplicates found (threshold={threshold}).")
+
+
+@main.command("remove-songs")
+@click.argument("song_ids", nargs=-1)
+@click.pass_context
+def remove_songs(ctx: click.Context, song_ids: tuple[str, ...]) -> None:
+    """Delete one or more songs and all their dependent data from the database.
+
+    SONG_IDS are the slug identifiers shown by 'lyrkl status' (e.g.
+    eminem__lose_yourself). Each song's variations, style descriptions,
+    and LLM response records are removed along with the song row itself.
+
+    \b
+    Examples:
+      lyrkl remove-songs katy_perry_earth ariana_grande_earth
+    """
+    if not song_ids:
+        raise click.UsageError("Provide at least one song ID to remove.")
+
+    db: Database = ctx.obj["db"]
+    removed = 0
+    for sid in song_ids:
+        if db.delete_song(sid):
+            click.echo(f"Removed: {sid}")
+            removed += 1
+        else:
+            click.echo(f"Not found: {sid}")
+    click.echo(f"Done. Removed {removed}/{len(song_ids)} songs.")
 
 
 @main.command("run-all")

@@ -42,15 +42,16 @@ PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
 
 CREATE TABLE IF NOT EXISTS songs (
-    song_id      TEXT PRIMARY KEY,
-    genius_id    INTEGER,
-    title        TEXT NOT NULL,
-    artist       TEXT NOT NULL,
-    genre        TEXT NOT NULL DEFAULT '',
-    raw_lyrics   TEXT NOT NULL DEFAULT '',
-    clean_lyrics TEXT NOT NULL DEFAULT '',
-    fetched_at   TEXT,
-    audio_path   TEXT
+    song_id       TEXT PRIMARY KEY,
+    genius_id     INTEGER,
+    title         TEXT NOT NULL,
+    artist        TEXT NOT NULL,
+    genre         TEXT NOT NULL DEFAULT '',
+    raw_lyrics    TEXT NOT NULL DEFAULT '',
+    clean_lyrics  TEXT NOT NULL DEFAULT '',
+    fetched_at    TEXT,
+    audio_path    TEXT,
+    artist_gender TEXT
 );
 
 CREATE TABLE IF NOT EXISTS style_descriptions (
@@ -131,6 +132,13 @@ class Database:
         """Create tables and indexes if they do not already exist."""
         self._conn.executescript(_SCHEMA_SQL)
         self._conn.commit()
+        # Migration: add artist_gender column to existing databases that
+        # were created before this field was introduced.
+        try:
+            self._conn.execute("ALTER TABLE songs ADD COLUMN artist_gender TEXT")
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists.
 
     @contextmanager
     def _tx(self) -> Generator[sqlite3.Connection, None, None]:
@@ -161,21 +169,23 @@ class Database:
                 """
                 INSERT INTO songs
                     (song_id, genius_id, title, artist, genre,
-                     raw_lyrics, clean_lyrics, fetched_at, audio_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     raw_lyrics, clean_lyrics, fetched_at, audio_path,
+                     artist_gender)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(song_id) DO UPDATE SET
-                    genius_id    = COALESCE(excluded.genius_id, genius_id),
-                    title        = excluded.title,
-                    artist       = excluded.artist,
-                    genre        = excluded.genre,
-                    raw_lyrics   = CASE WHEN excluded.raw_lyrics != ''
-                                        THEN excluded.raw_lyrics
-                                        ELSE raw_lyrics END,
-                    clean_lyrics = CASE WHEN excluded.clean_lyrics != ''
-                                        THEN excluded.clean_lyrics
-                                        ELSE clean_lyrics END,
-                    fetched_at   = COALESCE(excluded.fetched_at, fetched_at),
-                    audio_path   = COALESCE(excluded.audio_path, audio_path)
+                    genius_id     = COALESCE(excluded.genius_id, genius_id),
+                    title         = excluded.title,
+                    artist        = excluded.artist,
+                    genre         = excluded.genre,
+                    raw_lyrics    = CASE WHEN excluded.raw_lyrics != ''
+                                         THEN excluded.raw_lyrics
+                                         ELSE raw_lyrics END,
+                    clean_lyrics  = CASE WHEN excluded.clean_lyrics != ''
+                                         THEN excluded.clean_lyrics
+                                         ELSE clean_lyrics END,
+                    fetched_at    = COALESCE(excluded.fetched_at, fetched_at),
+                    audio_path    = COALESCE(excluded.audio_path, audio_path),
+                    artist_gender = COALESCE(excluded.artist_gender, artist_gender)
                 """,
                 (
                     song.song_id,
@@ -187,6 +197,7 @@ class Database:
                     song.clean_lyrics,
                     song.fetched_at.isoformat() if song.fetched_at else None,
                     song.audio_path,
+                    song.artist_gender,
                 ),
             )
 
@@ -268,6 +279,30 @@ class Database:
                 "UPDATE songs SET audio_path = ? WHERE song_id = ?",
                 (audio_path, song_id),
             )
+
+    def delete_song(self, song_id: str) -> bool:
+        """Delete a song and all its dependent rows from the database.
+
+        Removes rows in foreign-key dependency order so that the
+        ``PRAGMA foreign_keys=ON`` constraint is satisfied:
+        variations -> style_descriptions -> llm_responses -> songs.
+        All deletes are executed inside a single transaction.
+
+        Args:
+            song_id: The song slug to delete (e.g. "eminem__lose_yourself").
+
+        Returns:
+            True if the song existed and was deleted; False if not found.
+        """
+        if self.get_song(song_id) is None:
+            return False
+        with self._tx() as conn:
+            conn.execute("DELETE FROM variations WHERE song_id = ?", (song_id,))
+            conn.execute("DELETE FROM style_descriptions WHERE song_id = ?", (song_id,))
+            conn.execute("DELETE FROM llm_responses WHERE song_id = ?", (song_id,))
+            conn.execute("DELETE FROM songs WHERE song_id = ?", (song_id,))
+        logger.info("delete_song: deleted '%s' and all dependent rows.", song_id)
+        return True
 
     # ------------------------------------------------------------------
     # Style descriptions
@@ -516,6 +551,7 @@ class Database:
                                     "title": song.title,
                                     "artist": song.artist,
                                     "genre": song.genre,
+                                    "artist_gender": song.artist_gender,
                                     "phi_aggregate": var.phi_aggregate,
                                     "phi_scores": var.phi_scores.to_dict(),
                                     "prompt_hash": var.prompt_hash,

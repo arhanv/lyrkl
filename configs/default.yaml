@@ -1,5 +1,6 @@
 genius:
   rate_limit_delay: 1.0
+  timeout: 30                  # HTTP read timeout in seconds for Genius API calls
 
 llm:
   provider: claude           # claude | gemini | openrouter
