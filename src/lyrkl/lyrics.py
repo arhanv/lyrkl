@@ -199,6 +199,38 @@ def _normalize_artist(name: str) -> str:
     return ascii_only or name.lower().strip()
 
 
+def _normalize_match_text(text: str) -> str:
+    """Normalize free text for loose artist-name containment checks."""
+    nfkd = unicodedata.normalize("NFKD", text)
+    ascii_only = nfkd.encode("ascii", "ignore").decode("ascii").lower()
+    normalized = re.sub(r"[^a-z0-9]+", " ", ascii_only).strip()
+    return re.sub(r"\s+", " ", normalized)
+
+
+def find_artist_name_flag(song: Song) -> Optional[tuple[str, str]]:
+    """Return the first lyric or bracket line that mentions the song artist."""
+    artist_key = _normalize_match_text(song.artist)
+    if not artist_key:
+        return None
+
+    padded_artist = f" {artist_key} "
+
+    for line in song.raw_lyrics.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            if padded_artist in f" {_normalize_match_text(stripped)} ":
+                return ("section", stripped)
+
+    for line in song.clean_lyrics.splitlines():
+        stripped = line.strip()
+        if not stripped or re.match(r"^\[.*\]$", stripped):
+            continue
+        if padded_artist in f" {_normalize_match_text(stripped)} ":
+            return ("lyrics", stripped)
+
+    return None
+
+
 @dataclass
 class ArtistSongFilter:
     """Filtering options for artist song resolution via Genius.

@@ -305,6 +305,37 @@ def check_duplicates(
         click.echo(f"No duplicates found (threshold={threshold}).")
 
 
+@main.command("check-artist-mentions")
+@click.option(
+    "--out",
+    "out_path",
+    default="data/artist_mentions.txt",
+    show_default=True,
+    help="Write flagged songs and one matching excerpt per song to this text file.",
+)
+@click.option(
+    "--song", "song_ids", multiple=True, help="Specific song IDs to check (defaults to all)."
+)
+@click.pass_context
+def check_artist_mentions(
+    ctx: click.Context,
+    out_path: str,
+    song_ids: tuple[str, ...],
+) -> None:
+    """Flag songs whose stored lyrics mention their own artist name.
+
+    Runs after 'lyrkl fetch'. Checks raw bracket headers like
+    '[Chorus: Jay-Z]' plus lyric lines, writes a short text report, and prints
+    the flagged-song count.
+    """
+    pipeline: LyrkIPipeline = ctx.obj["pipeline"]
+    flagged = pipeline.check_artist_mentions(
+        out_path=out_path,
+        song_ids=list(song_ids) if song_ids else None,
+    )
+    click.echo(f"Flagged {len(flagged)} song(s). Report written to {out_path}.")
+
+
 @main.command("remove-songs")
 @click.argument("song_ids", nargs=-1)
 @click.pass_context

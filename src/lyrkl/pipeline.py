@@ -45,7 +45,12 @@ from lyrkl.llm import (
     get_client,
     parse_candidates,
 )
-from lyrkl.lyrics import ArtistSongFilter, GeniusLyricsFetcher, make_song_id
+from lyrkl.lyrics import (
+    ArtistSongFilter,
+    GeniusLyricsFetcher,
+    find_artist_name_flag,
+    make_song_id,
+)
 from lyrkl.models import (
     LLMResponse,
     Song,
@@ -298,6 +303,37 @@ class LyrkIPipeline:
                 "check_duplicates: no duplicates found (threshold=%.2f).", threshold
             )
 
+        return flagged
+
+    def check_artist_mentions(
+        self,
+        out_path: str,
+        song_ids: Optional[list[str]] = None,
+    ) -> list[tuple[Song, str, str]]:
+        """Write a short report of songs whose lyrics mention their artist name."""
+        songs = (
+            [self._db.get_song(sid) for sid in song_ids]
+            if song_ids
+            else self._db.list_songs()
+        )
+        songs = [s for s in songs if s and s.has_lyrics]
+
+        flagged: list[tuple[Song, str, str]] = []
+        for song in songs:
+            match = find_artist_name_flag(song)
+            if match is not None:
+                kind, excerpt = match
+                flagged.append((song, kind, excerpt))
+
+        lines = [f"Flagged songs: {len(flagged)}", ""]
+        for song, kind, excerpt in flagged:
+            lines.append(f"{song.song_id} [{kind}]")
+            lines.append(f"{song.artist} - {song.title}")
+            lines.append(excerpt)
+            lines.append("")
+
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
         return flagged
 
     # ------------------------------------------------------------------
