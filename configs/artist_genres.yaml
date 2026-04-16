@@ -1,0 +1,21 @@
+# Genre definitions for utils/fetch_artists.py
+#
+# For each genre:
+#   tag -> Last.fm tag string (passed to tag.gettopartists)
+#
+# Artists are filtered only by country (the allow-list below). Change `tag`
+# if a genre returns too few or off-target results on Last.fm.
+
+countries: [US, GB, CA, AU, IE, NZ]
+
+genres:
+  pop:
+    tag: pop
+  rock:
+    tag: rock
+  hip-hop:
+    tag: hip-hop
+  rnb:
+    tag: rnb
+  country:
+    tag: country
