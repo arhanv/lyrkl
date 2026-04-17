@@ -289,8 +289,8 @@ class GeniusLyricsFetcher:
 
         self._genius = lyricsgenius.Genius(
             api_token,
-            verbose=False,
-            remove_section_headers=False,
+            # verbose=False, # this parameter is deprecated in lyricsgenius 3.12.0.
+            remove_section_headers= False,
             timeout=timeout,
         )
         self._delay = rate_limit_delay
